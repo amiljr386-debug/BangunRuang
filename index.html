@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualisasi Bangun Ruang 3D & Jaring-Jaring Interaktif</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js & OrbitControls CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Google Font: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    },
+                    colors: {
+                        brand: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            overflow: hidden;
+            user-select: none;
+        }
+        /* Glassmorphism styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.4);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.8);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans h-screen w-screen relative">
+
+    <!-- 3D CANVAS CONTAINER -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></div>
+
+    <!-- HEADER / NAVIGATION -->
+    <header class="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+        <div class="glass-panel px-4 py-2.5 rounded-2xl flex items-center space-x-3 pointer-events-auto shadow-2xl">
+            <div class="bg-gradient-to-tr from-indigo-500 to-purple-500 p-2 rounded-xl shadow-lg text-white">
+                <i class="fa-solid fa-shapes text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base tracking-tight text-white flex items-center gap-2">
+                    Bangun Ruang <span class="text-[10px] bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full uppercase tracking-wider">3D Viz</span>
+                </h1>
+                <p class="text-[11px] text-slate-400">Kelompok 4</p>
+            </div>
+        </div>
+
+        <!-- Quick Camera Controls Overlay -->
+        <div class="glass-panel px-3 py-1.5 rounded-2xl flex items-center space-x-2 pointer-events-auto text-xs">
+            <button id="btn-reset-cam" class="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-all flex items-center gap-1.5" title="Reset Kamera">
+                <i class="fa-solid fa-camera-rotate"></i>
+                <span class="hidden sm:inline">Reset View</span>
+            </button>
+            <div class="h-4 w-px bg-slate-700"></div>
+            <button id="btn-toggle-autorotate" class="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-all flex items-center gap-1.5" title="Rotasi Otomatis">
+                <i id="autorotate-icon" class="fa-solid fa-rotate text-indigo-400"></i>
+                <span class="hidden sm:inline">Auto Rotate</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN SIDEBAR CONTROLS (RIGHT PANEL) -->
+    <aside class="absolute top-20 right-4 bottom-4 w-80 sm:w-96 glass-panel rounded-3xl p-4 sm:p-5 flex flex-col justify-between z-10 shadow-2xl overflow-y-auto pointer-events-auto space-y-4">
+        
+        <!-- SECTION 1: SHAPE SELECTOR -->
+        <div class="space-y-2">
+            <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-cubes text-indigo-400"></i> Pilih Bangun Ruang
+            </label>
+            <select id="shape-select" class="w-full bg-slate-900/90 text-white text-sm font-medium rounded-xl p-3 border border-slate-700/80 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-inner">
+                <option value="cube">Kubus (Cube)</option>
+                <option value="cuboid">Balok (Cuboid)</option>
+                <option value="pyramid">Limas Segi Empat (Square Pyramid)</option>
+                <option value="prism">Prisma Segitiga (Triangular Prism)</option>
+                <option value="cylinder">Tabung (Cylinder)</option>
+                <option value="cone">Kerucut (Cone)</option>
+            </select>
+        </div>
+
+        <!-- SECTION 2: FOLD / UNFOLD SLIDER -->
+        <div class="bg-indigo-950/40 p-3.5 rounded-2xl border border-indigo-500/20 space-y-2">
+            <div class="flex justify-between items-center">
+                <label for="fold-slider" class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <i class="fa-solid fa-box-open"></i> Jaring-Jaring (Unfold)
+                </label>
+                <span id="fold-value-text" class="text-xs font-mono font-semibold bg-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-full">0%</span>
+            </div>
+            <input id="fold-slider" type="range" min="0" max="100" value="0" step="0.5" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+            <div class="flex justify-between text-[10px] text-slate-400 font-medium px-0.5">
+                <span>0% (Tertutup)</span>
+                <span>100% (Terbuka)</span>
+            </div>
+        </div>
+
+        <!-- SECTION 3: PARAMETERS & SURFACE AREA CALCULATOR -->
+        <div class="space-y-3">
+            <div class="flex items-center justify-between">
+                <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-sliders text-indigo-400"></i> Parameter & Ukuran
+                </label>
+                <!-- Toggle Mode Input -->
+                <div class="flex bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[11px]">
+                    <button id="mode-dim-btn" class="px-2 py-1 rounded-md font-medium text-white bg-indigo-600 transition-all">Dimensi</button>
+                    <button id="mode-area-btn" class="px-2 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all">Luas Area</button>
+                </div>
+            </div>
+
+            <!-- Dynamic Inputs Container -->
+            <div id="inputs-container" class="space-y-2.5 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+                <!-- Inputs injected via JS -->
+            </div>
+        </div>
+
+        <!-- SECTION 4: MATHEMATICAL STATS & FORMULAS -->
+        <div class="bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800 space-y-2.5 font-mono">
+            <span class="text-[11px] font-sans font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-calculator text-emerald-400"></i> Kalkulasi Real-Time
+            </span>
+
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                    <span class="text-[10px] text-slate-400 font-sans block">Luas Permukaan (L)</span>
+                    <span id="stat-surface-area" class="text-emerald-400 font-bold text-sm">0.00</span>
+                    <span class="text-[9px] text-slate-500 font-sans"> unit²</span>
+                </div>
+                <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                    <span class="text-[10px] text-slate-400 font-sans block">Volume (V)</span>
+                    <span id="stat-volume" class="text-blue-400 font-bold text-sm">0.00</span>
+                    <span class="text-[9px] text-slate-500 font-sans"> unit³</span>
+                </div>
+            </div>
+
+            <!-- Formulas Box -->
+            <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 space-y-1 text-[11px]">
+                <div class="text-slate-300"><span class="text-emerald-400">L = </span><span id="formula-area">-</span></div>
+                <div class="text-slate-300"><span class="text-blue-400">V = </span><span id="formula-vol">-</span></div>
+            </div>
+        </div>
+
+        <!-- FOOTER INSTRUCTIONS -->
+        <div class="text-[10px] text-slate-400 text-center space-y-1 pt-1 border-t border-slate-800/80">
+            <p><i class="fa-solid fa-mouse text-slate-400 mr-1"></i> Klik & Drag mouse untuk rotasi 360°. Scroll untuk Zoom.</p>
+        </div>
+    </aside>
+
+    <!-- THREE.JS ENGINE & GEOMETRY LOGIC -->
+    <script>
+        // GLOBAL THREE.JS VARIABLES
+        let scene, camera, renderer, controls;
+        let currentShapeGroup = null;
+        let isAutoRotate = true;
+
+        // GEOMETRY PARAMETERS STATE
+        const state = {
+            shape: 'cube',
+            foldPercent: 0,
+            inputMode: 'dimension', // 'dimension' or 'area'
+            targetArea: 150,
+            // Individual Dimensions
+            cube: { a: 5 },
+            cuboid: { l: 6, w: 4, h: 5 },
+            pyramid: { a: 5, h: 6 },
+            prism: { a: 4, h_tri: 3.5, h: 6 },
+            cylinder: { r: 3, h: 6 },
+            cone: { r: 3, h: 6 }
+        };
+
+        // DOM ELEMENTS
+        const container = document.getElementById('canvas-container');
+        const shapeSelect = document.getElementById('shape-select');
+        const foldSlider = document.getElementById('fold-slider');
+        const foldValueText = document.getElementById('fold-value-text');
+        const inputsContainer = document.getElementById('inputs-container');
+        const modeDimBtn = document.getElementById('mode-dim-btn');
+        const modeAreaBtn = document.getElementById('mode-area-btn');
+        const statArea = document.getElementById('stat-surface-area');
+        const statVol = document.getElementById('stat-volume');
+        const formulaArea = document.getElementById('formula-area');
+        const formulaVol = document.getElementById('formula-vol');
+        const btnResetCam = document.getElementById('btn-reset-cam');
+        const btnToggleAutoRotate = document.getElementById('btn-toggle-autorotate');
+        const autoRotateIcon = document.getElementById('autorotate-icon');
+
+        // INITIALIZATION
+        window.addEventListener('load', () => {
+            initThree();
+            setupEventListeners();
+            updateUI();
+            buildShape();
+            animate();
+        });
+
+        // THREE.JS SCENE SETUP
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d);
+            scene.fog = new THREE.FogExp2(0x0a0f1d, 0.015);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(12, 12, 18);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Orbit Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.1; // Allow slightly below ground
+            controls.autoRotate = isAutoRotate;
+            controls.autoRotateSpeed = 1.5;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(15, 25, 15);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0x818cf8, 1, 30);
+            pointLight.position.set(-10, -5, -10);
+            scene.add(pointLight);
+
+            // Grid Floor
+            const gridHelper = new THREE.GridHelper(40, 40, 0x4f46e5, 0x1e293b);
+            gridHelper.position.y = -0.01;
+            scene.add(gridHelper);
+
+            // Window Resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // MATERIAL CREATOR HELPER
+        function createFaceMaterial(color = 0x6366f1) {
+            return new THREE.MeshStandardMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.65,
+                side: THREE.DoubleSide,
+                roughness: 0.2,
+                metalness: 0.1
+            });
+        }
+
+        function addEdges(mesh, color = 0xffffff) {
+            const edges = new THREE.EdgesGeometry(mesh.geometry);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: color, linewidth: 2 }));
+            mesh.add(line);
+        }
+
+        // Helpers for mathematically arranged, fully flat nets (top view in the XZ plane).
+        // Each polygon is authored directly in its final net position, so panels cannot drift
+        // because of accumulated pivot rotations.
+        function addFlatPolygon(group, points, material) {
+            const shape = new THREE.Shape();
+            shape.moveTo(points[0][0], points[0][1]);
+            for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+            shape.closePath();
+            const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), material);
+            mesh.rotation.x = Math.PI / 2; // XY -> XZ (horizontal net)
+            addEdges(mesh);
+            group.add(mesh);
+            return mesh;
+        }
+
+        function addFlatCircle(group, radius, x, z, material) {
+            const mesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 64), material);
+            mesh.position.set(x, 0, z);
+            mesh.rotation.x = -Math.PI / 2;
+            addEdges(mesh);
+            group.add(mesh);
+            return mesh;
+        }
+
+        function buildFlatNet(group, mat, matBase) {
+            switch (state.shape) {
+                case 'cube': {
+                    const a = state.cube.a, q = a / 2;
+                    // Cross net: one center square, four surrounding squares, and one flap.
+                    addFlatPolygon(group, [[-q,-q],[q,-q],[q,q],[-q,q]], matBase);
+                    addFlatPolygon(group, [[-q,-3*q],[q,-3*q],[q,-q],[-q,-q]], mat);
+                    addFlatPolygon(group, [[-q,q],[q,q],[q,3*q],[-q,3*q]], mat);
+                    addFlatPolygon(group, [[-3*q,-q],[-q,-q],[-q,q],[-3*q,q]], mat);
+                    addFlatPolygon(group, [[q,-q],[3*q,-q],[3*q,q],[q,q]], mat);
+                    addFlatPolygon(group, [[-q,-5*q],[q,-5*q],[q,-3*q],[-q,-3*q]], mat);
+                    break;
+                }
+                case 'cuboid': {
+                    const { l, w, h } = state.cuboid;
+                    const x = l/2, z = w/2;
+                    // Central l×w rectangle; four lateral faces; final l×w face on the front flap.
+                    addFlatPolygon(group, [[-x,-z],[x,-z],[x,z],[-x,z]], matBase);
+                    addFlatPolygon(group, [[-x,-z-h],[x,-z-h],[x,-z],[-x,-z]], mat);
+                    addFlatPolygon(group, [[-x,z],[x,z],[x,z+h],[-x,z+h]], mat);
+                    addFlatPolygon(group, [[-x-h,-z],[-x,-z],[-x,z],[-x-h,z]], mat);
+                    addFlatPolygon(group, [[x,-z],[x+h,-z],[x+h,z],[x,z]], mat);
+                    addFlatPolygon(group, [[-x,-z-2*h],[x,-z-2*h],[x,-z-h],[-x,-z-h]], matBase);
+                    break;
+                }
+                case 'pyramid': {
+                    const { a, h } = state.pyramid, q = a/2;
+                    const slant = Math.sqrt(q*q + h*h);
+                    addFlatPolygon(group, [[-q,-q],[q,-q],[q,q],[-q,q]], matBase);
+                    // Four congruent triangular faces, each attached to one side of the square.
+                    addFlatPolygon(group, [[-q,-q],[q,-q],[0,-q-slant]], mat);
+                    addFlatPolygon(group, [[q,-q],[q,q],[q+slant,0]], mat);
+                    addFlatPolygon(group, [[q,q],[-q,q],[0,q+slant]], mat);
+                    addFlatPolygon(group, [[-q,q],[-q,-q],[-q-slant,0]], mat);
+                    break;
+                }
+                case 'prism': {
+                    const { a, h_tri, h } = state.prism;
+                    const q = a/2, side = Math.sqrt(q*q + h_tri*h_tri), halfH = h/2;
+                    // Three rectangles in a strip: side × h, base × h, side × h.
+                    addFlatPolygon(group, [[-q,-halfH],[q,-halfH],[q,halfH],[-q,halfH]], matBase);
+                    addFlatPolygon(group, [[-q-side,-halfH],[-q,-halfH],[-q,halfH],[-q-side,halfH]], mat);
+                    addFlatPolygon(group, [[q,-halfH],[q+side,-halfH],[q+side,halfH],[q,halfH]], mat);
+                    // Two congruent triangular ends attached to opposite long edges of the base rectangle.
+                    addFlatPolygon(group, [[-q,-halfH],[q,-halfH],[0,-halfH-h_tri]], mat);
+                    addFlatPolygon(group, [[q,halfH],[-q,halfH],[0,halfH+h_tri]], mat);
+                    break;
+                }
+                case 'cylinder': {
+                    const { r, h } = state.cylinder;
+                    const circumference = 2 * Math.PI * r, halfC = circumference/2, halfH = h/2;
+                    // One rectangle (circumference × height) and two equal circular bases.
+                    addFlatPolygon(group, [[-halfC,-halfH],[halfC,-halfH],[halfC,halfH],[-halfC,halfH]], mat);
+                    addFlatCircle(group, r, 0, halfH+r, matBase);
+                    addFlatCircle(group, r, 0, -halfH-r, matBase);
+                    break;
+                }
+                case 'cone': {
+                    const { r, h } = state.cone;
+                    const slant = Math.sqrt(r*r + h*h);
+                    const angle = 2 * Math.PI * r / slant;
+                    // Sector arc length = circumference of the base circle.
+                    const sector = new THREE.Shape();
+                    sector.moveTo(0, 0);
+                    sector.lineTo(slant, 0);
+                    sector.absarc(0, 0, slant, 0, angle, false);
+                    sector.lineTo(0, 0);
+                    const sectorMesh = new THREE.Mesh(new THREE.ShapeGeometry(sector, 64), mat);
+                    sectorMesh.rotation.x = Math.PI/2;
+                    addEdges(sectorMesh);
+                    group.add(sectorMesh);
+                    // The circular base is shown beside the sector: both are separate net components.
+                    addFlatCircle(group, r, slant + r + Math.max(0.5, r*0.25), 0, matBase);
+                    break;
+                }
+            }
+        }
+
+        // BUILD SHAPES. 0% is the exact solid; 100% is the flat net.
+        function buildShape() {
+            if (currentShapeGroup) {
+                scene.remove(currentShapeGroup);
+                currentShapeGroup.traverse(obj => {
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        (Array.isArray(obj.material) ? obj.material : [obj.material])
+                            .forEach(m => m.dispose());
+                    }
+                });
+            }
+            currentShapeGroup = new THREE.Group();
+            scene.add(currentShapeGroup);
+
+            const mat = createFaceMaterial(0x6366f1);
+            const matBase = createFaceMaterial(0x4338ca);
+
+            // Endpoints use dedicated, geometrically correct constructions:
+            // 0% = exact solid, 100% = clean planar net with correctly sized panels.
+            if (state.foldPercent <= 0.001) {
+                buildClosedSolid(currentShapeGroup, mat, matBase);
+                calculateStats();
+                return;
+            }
+            if (state.foldPercent >= 99.999) {
+                buildFlatNet(currentShapeGroup, mat, matBase);
+                calculateStats();
+                return;
+            }
+
+            // Intermediate positions retain the animated folding construction.
+            const foldRad = (1 - state.foldPercent / 100) * (Math.PI / 2);
+            switch (state.shape) {
+                case 'cube': buildCube(currentShapeGroup, state.cube.a, foldRad, mat, matBase); break;
+                case 'cuboid': buildCuboid(currentShapeGroup, state.cuboid.l, state.cuboid.w, state.cuboid.h, foldRad, mat, matBase); break;
+                case 'pyramid': buildPyramid(currentShapeGroup, state.pyramid.a, state.pyramid.h, foldRad, mat, matBase); break;
+                case 'prism': buildPrism(currentShapeGroup, state.prism.a, state.prism.h_tri, state.prism.h, foldRad, mat, matBase); break;
+                case 'cylinder': buildCylinder(currentShapeGroup, state.cylinder.r, state.cylinder.h, foldRad, mat, matBase); break;
+                case 'cone': buildCone(currentShapeGroup, state.cone.r, state.cone.h, foldRad, mat, matBase); break;
+            }
+            calculateStats();
+        }
+
+        // Accurate closed solids, centered over the ground plane.
+        function buildClosedSolid(group, sideMaterial, baseMaterial) {
+            const solidMaterial = new THREE.MeshStandardMaterial({
+                color: 0x6366f1, roughness: 0.32, metalness: 0.05,
+                transparent: true, opacity: 0.82, side: THREE.DoubleSide
+            });
+            let geometry, mesh;
+
+            switch (state.shape) {
+                case 'cube': {
+                    const a = state.cube.a;
+                    geometry = new THREE.BoxGeometry(a, a, a);
+                    mesh = new THREE.Mesh(geometry, solidMaterial);
+                    mesh.position.y = a / 2;
+                    break;
+                }
+                case 'cuboid': {
+                    const { l, w, h } = state.cuboid;
+                    geometry = new THREE.BoxGeometry(l, h, w);
+                    mesh = new THREE.Mesh(geometry, solidMaterial);
+                    mesh.position.y = h / 2;
+                    break;
+                }
+                case 'pyramid': {
+                    const { a, h } = state.pyramid;
+                    geometry = new THREE.ConeGeometry(a / Math.sqrt(2), h, 4, 1);
+                    mesh = new THREE.Mesh(geometry, solidMaterial);
+                    mesh.rotation.y = Math.PI / 4;
+                    mesh.position.y = h / 2;
+                    break;
+                }
+                case 'prism': {
+                    const { a, h_tri, h } = state.prism;
+                    const triangle = new THREE.Shape();
+                    triangle.moveTo(-a / 2, 0);
+                    triangle.lineTo(a / 2, 0);
+                    triangle.lineTo(0, h_tri);
+                    triangle.closePath();
+                    geometry = new THREE.ExtrudeGeometry(triangle, {
+                        depth: h, bevelEnabled: false, steps: 1, curveSegments: 1
+                    });
+                    geometry.translate(0, 0, -h / 2);
+                    mesh = new THREE.Mesh(geometry, solidMaterial);
+                    break;
+                }
+                case 'cylinder': {
+                    const { r, h } = state.cylinder;
+                    geometry = new THREE.CylinderGeometry(r, r, h, 64);
+                    mesh = new THREE.Mesh(geometry, solidMaterial);
+                    mesh.position.y = h / 2;
+                    break;
+                }
+                case 'cone': {
+                    const { r, h } = state.cone;
+                    geometry = new THREE.ConeGeometry(r, h, 64);
+                    mesh = new THREE.Mesh(geometry, solidMaterial);
+                    mesh.position.y = h / 2;
+                    break;
+                }
+            }
+
+            if (mesh) {
+                addEdges(mesh, 0xffffff);
+                group.add(mesh);
+            }
+        }
+
+        // 1. KUBUS (CUBE)
+        function buildCube(group, a, fold, mat, matBase) {
+            // Base (Bottom)
+            const baseGeo = new THREE.PlaneGeometry(a, a);
+            const baseMesh = new THREE.Mesh(baseGeo, matBase);
+            baseMesh.rotation.x = -Math.PI / 2;
+            addEdges(baseMesh);
+            group.add(baseMesh);
+
+            // Front
+            const pFront = new THREE.Group();
+            pFront.position.set(0, 0, a/2);
+            baseMesh.add(pFront);
+            const mFront = new THREE.Mesh(baseGeo, mat);
+            mFront.position.set(0, a/2, 0);
+            addEdges(mFront);
+            pFront.add(mFront);
+            pFront.rotation.x = fold;
+
+            // Top (attached to Front)
+            const pTop = new THREE.Group();
+            pTop.position.set(0, a, 0);
+            mFront.add(pTop);
+            const mTop = new THREE.Mesh(baseGeo, mat);
+            mTop.position.set(0, a/2, 0);
+            addEdges(mTop);
+            pTop.add(mTop);
+            pTop.rotation.x = fold;
+
+            // Back
+            const pBack = new THREE.Group();
+            pBack.position.set(0, 0, -a/2);
+            baseMesh.add(pBack);
+            const mBack = new THREE.Mesh(baseGeo, mat);
+            mBack.position.set(0, -a/2, 0);
+            addEdges(mBack);
+            pBack.add(mBack);
+            pBack.rotation.x = -fold;
+
+            // Left
+            const pLeft = new THREE.Group();
+            pLeft.position.set(-a/2, 0, 0);
+            baseMesh.add(pLeft);
+            const mLeft = new THREE.Mesh(baseGeo, mat);
+            mLeft.position.set(-a/2, 0, 0);
+            mLeft.rotation.y = Math.PI/2;
+            addEdges(mLeft);
+            pLeft.add(mLeft);
+            pLeft.rotation.y = fold;
+
+            // Right
+            const pRight = new THREE.Group();
+            pRight.position.set(a/2, 0, 0);
+            baseMesh.add(pRight);
+            const mRight = new THREE.Mesh(baseGeo, mat);
+            mRight.position.set(a/2, 0, 0);
+            mRight.rotation.y = Math.PI/2;
+            addEdges(mRight);
+            pRight.add(mRight);
+            pRight.rotation.y = -fold;
+        }
+
+        // 2. BALOK (CUBOID)
+        function buildCuboid(group, l, w, h, fold, mat, matBase) {
+            // Base Plane (l x w)
+            const baseGeo = new THREE.PlaneGeometry(l, w);
+            const baseMesh = new THREE.Mesh(baseGeo, matBase);
+            baseMesh.rotation.x = -Math.PI / 2;
+            addEdges(baseMesh);
+            group.add(baseMesh);
+
+            // Front (l x h)
+            const pFront = new THREE.Group();
+            pFront.position.set(0, -w/2, 0);
+            baseMesh.add(pFront);
+            const mFront = new THREE.Mesh(new THREE.PlaneGeometry(l, h), mat);
+            mFront.position.set(0, -h/2, 0);
+            addEdges(mFront);
+            pFront.add(mFront);
+            pFront.rotation.x = -fold;
+
+            // Top Plane (l x w) attached to Front
+            const pTop = new THREE.Group();
+            pTop.position.set(0, -h, 0);
+            mFront.add(pTop);
+            const mTop = new THREE.Mesh(baseGeo, mat);
+            mTop.position.set(0, -w/2, 0);
+            addEdges(mTop);
+            pTop.add(mTop);
+            pTop.rotation.x = -fold;
+
+            // Back (l x h)
+            const pBack = new THREE.Group();
+            pBack.position.set(0, w/2, 0);
+            baseMesh.add(pBack);
+            const mBack = new THREE.Mesh(new THREE.PlaneGeometry(l, h), mat);
+            mBack.position.set(0, h/2, 0);
+            addEdges(mBack);
+            pBack.add(mBack);
+            pBack.rotation.x = fold;
+
+            // Left (h x w)
+            const pLeft = new THREE.Group();
+            pLeft.position.set(-l/2, 0, 0);
+            baseMesh.add(pLeft);
+            const mLeft = new THREE.Mesh(new THREE.PlaneGeometry(h, w), mat);
+            mLeft.position.set(-h/2, 0, 0);
+            addEdges(mLeft);
+            pLeft.add(mLeft);
+            pLeft.rotation.y = -fold;
+
+            // Right (h x w)
+            const pRight = new THREE.Group();
+            pRight.position.set(l/2, 0, 0);
+            baseMesh.add(pRight);
+            const mRight = new THREE.Mesh(new THREE.PlaneGeometry(h, w), mat);
+            mRight.position.set(h/2, 0, 0);
+            addEdges(mRight);
+            pRight.add(mRight);
+            pRight.rotation.y = fold;
+        }
+
+        // 3. LIMAS SEGI EMPAT (SQUARE PYRAMID)
+        function buildPyramid(group, a, h, fold, mat, matBase) {
+            const baseGeo = new THREE.PlaneGeometry(a, a);
+            const baseMesh = new THREE.Mesh(baseGeo, matBase);
+            baseMesh.rotation.x = -Math.PI / 2;
+            addEdges(baseMesh);
+            group.add(baseMesh);
+
+            // Slant Height of Triangle
+            const slantH = Math.sqrt(Math.pow(a / 2, 2) + Math.pow(h, 2));
+            const triAngle = Math.atan2(h, a / 2); // Angle to fold to form pyramid
+            const foldAngle = fold * (triAngle / (Math.PI / 2));
+
+            // Triangle Geometry
+            const triShape = new THREE.Shape();
+            triShape.moveTo(0, slantH);
+            triShape.lineTo(-a / 2, 0);
+            triShape.lineTo(a / 2, 0);
+            triShape.closePath();
+            const triGeo = new THREE.ShapeGeometry(triShape);
+
+            // 4 Triangles
+            const sides = [
+                { pos: [0, -a/2, 0], rot: [foldAngle, 0, 0] },
+                { pos: [0, a/2, 0], rot: [-foldAngle, 0, Math.PI] },
+                { pos: [-a/2, 0, 0], rot: [0, foldAngle, -Math.PI/2] },
+                { pos: [a/2, 0, 0], rot: [0, -foldAngle, Math.PI/2] }
+            ];
+
+            sides.forEach(s => {
+                const pivot = new THREE.Group();
+                pivot.position.set(...s.pos);
+                baseMesh.add(pivot);
+                const mesh = new THREE.Mesh(triGeo, mat);
+                mesh.rotation.set(s.rot[0], s.rot[1], s.rot[2]);
+                addEdges(mesh);
+                pivot.add(mesh);
+            });
+        }
+
+        // 4. PRISMA SEGITIGA (TRIANGULAR PRISM)
+        function buildPrism(group, a, h_tri, h, fold, mat, matBase) {
+            // Main Rectangular Base (a x h)
+            const baseGeo = new THREE.PlaneGeometry(a, h);
+            const baseMesh = new THREE.Mesh(baseGeo, matBase);
+            baseMesh.rotation.x = -Math.PI / 2;
+            addEdges(baseMesh);
+            group.add(baseMesh);
+
+            // Side Rectangles (Isosceles assumption for simplicity)
+            const sideLen = Math.sqrt(Math.pow(a / 2, 2) + Math.pow(h_tri, 2));
+            const foldSideAngle = fold * (Math.acos(a / (2 * sideLen)) / (Math.PI / 2));
+
+            // Left Rect
+            const pLeft = new THREE.Group();
+            pLeft.position.set(-a/2, 0, 0);
+            baseMesh.add(pLeft);
+            const mLeft = new THREE.Mesh(new THREE.PlaneGeometry(sideLen, h), mat);
+            mLeft.position.set(-sideLen/2, 0, 0);
+            addEdges(mLeft);
+            pLeft.add(mLeft);
+            pLeft.rotation.y = foldSideAngle;
+
+            // Right Rect
+            const pRight = new THREE.Group();
+            pRight.position.set(a/2, 0, 0);
+            baseMesh.add(pRight);
+            const mRight = new THREE.Mesh(new THREE.PlaneGeometry(sideLen, h), mat);
+            mRight.position.set(sideLen/2, 0, 0);
+            addEdges(mRight);
+            pRight.add(mRight);
+            pRight.rotation.y = -foldSideAngle;
+
+            // Front Triangle
+            const triShape = new THREE.Shape();
+            triShape.moveTo(-a/2, 0);
+            triShape.lineTo(a/2, 0);
+            triShape.lineTo(0, h_tri);
+            triShape.closePath();
+            const triGeo = new THREE.ShapeGeometry(triShape);
+
+            const pFront = new THREE.Group();
+            pFront.position.set(0, -h/2, 0);
+            baseMesh.add(pFront);
+            const mFront = new THREE.Mesh(triGeo, mat);
+            mFront.rotation.x = -fold;
+            addEdges(mFront);
+            pFront.add(mFront);
+
+            // Back Triangle
+            const pBack = new THREE.Group();
+            pBack.position.set(0, h/2, 0);
+            baseMesh.add(pBack);
+            const mBack = new THREE.Mesh(triGeo, mat);
+            mBack.rotation.x = fold;
+            mBack.rotation.z = Math.PI;
+            addEdges(mBack);
+            pBack.add(mBack);
+        }
+
+        // 5. TABUNG (CYLINDER)
+        function buildCylinder(group, r, h, fold, mat, matBase) {
+            const circumference = 2 * Math.PI * r;
+
+            // Unrolled Side Rect (Circumference x Height)
+            const sideGeo = new THREE.PlaneGeometry(circumference, h, 32, 1);
+            const sideMesh = new THREE.Mesh(sideGeo, mat);
+            sideMesh.position.y = h/2;
+            addEdges(sideMesh);
+
+            // Curving / Bending effect based on fold parameter
+            const positions = sideGeo.attributes.position;
+            const curvature = (1 - fold / (Math.PI / 2)); // 1 when flat, 0 when cylinder
+            if (curvature < 0.99) {
+                const radius = circumference / (2 * Math.PI * (1 - curvature + 0.001));
+                for (let i = 0; i < positions.count; i++) {
+                    const x = positions.getX(i);
+                    const theta = (x / circumference) * (2 * Math.PI * (1 - curvature));
+                    positions.setX(i, Math.sin(theta) * radius);
+                    positions.setZ(i, Math.cos(theta) * radius - radius);
+                }
+                positions.needsUpdate = true;
+            }
+            group.add(sideMesh);
+
+            // Top & Bottom Circle Lid Pivot
+            const circleGeo = new THREE.CircleGeometry(r, 32);
+
+            // Bottom Circle
+            const pBot = new THREE.Group();
+            pBot.position.set(0, 0, 0);
+            group.add(pBot);
+            const mBot = new THREE.Mesh(circleGeo, matBase);
+            mBot.position.set(0, -r, 0);
+            mBot.rotation.x = Math.PI / 2 + fold;
+            addEdges(mBot);
+            pBot.add(mBot);
+
+            // Top Circle
+            const pTop = new THREE.Group();
+            pTop.position.set(0, h, 0);
+            group.add(pTop);
+            const mTop = new THREE.Mesh(circleGeo, matBase);
+            mTop.position.set(0, r, 0);
+            mTop.rotation.x = -Math.PI / 2 - fold;
+            addEdges(mTop);
+            pTop.add(mTop);
+        }
+
+        // 6. KERUCUT (CONE)
+        function buildCone(group, r, h, fold, mat, matBase) {
+            const slantH = Math.sqrt(r * r + h * h);
+            const sectorAngle = (r / slantH) * (2 * Math.PI);
+
+            // Circular Sector Net
+            const sectorGeo = new THREE.RingGeometry(0.01, slantH, 32, 1, 0, sectorAngle);
+            const sectorMesh = new THREE.Mesh(sectorGeo, mat);
+            sectorMesh.rotation.x = -Math.PI / 2;
+            addEdges(sectorMesh);
+            group.add(sectorMesh);
+
+            // Base Circle Attached to Net Edge
+            const circleGeo = new THREE.CircleGeometry(r, 32);
+            const pBase = new THREE.Group();
+            pBase.position.set(slantH * Math.cos(sectorAngle/2), 0, slantH * Math.sin(sectorAngle/2));
+            group.add(pBase);
+            const mBase = new THREE.Mesh(circleGeo, matBase);
+            mBase.position.set(r, 0, 0);
+            mBase.rotation.x = Math.PI / 2 + fold;
+            addEdges(mBase);
+            pBase.add(mBase);
+        }
+
+        // CALCULATE STATS & FORMULAS
+        function calculateStats() {
+            let area = 0, vol = 0;
+            let fArea = '', fVol = '';
+
+            if (state.shape === 'cube') {
+                const a = state.cube.a;
+                area = 6 * a * a;
+                vol = Math.pow(a, 3);
+                fArea = `6 × ${a.toFixed(1)}²`;
+                fVol = `${a.toFixed(1)}³`;
+            } else if (state.shape === 'cuboid') {
+                const { l, w, h } = state.cuboid;
+                area = 2 * (l*w + l*h + w*h);
+                vol = l * w * h;
+                fArea = `2×(${l.toFixed(1)}×${w.toFixed(1)} + ${l.toFixed(1)}×${h.toFixed(1)} + ${w.toFixed(1)}×${h.toFixed(1)})`;
+                fVol = `${l.toFixed(1)} × ${w.toFixed(1)} × ${h.toFixed(1)}`;
+            } else if (state.shape === 'pyramid') {
+                const { a, h } = state.pyramid;
+                const slant = Math.sqrt(Math.pow(a/2, 2) + h*h);
+                area = a*a + 2*a*slant;
+                vol = (1/3) * a * a * h;
+                fArea = `${a.toFixed(1)}² + 2×${a.toFixed(1)}×${slant.toFixed(1)}`;
+                fVol = `1/3 × ${a.toFixed(1)}² × ${h.toFixed(1)}`;
+            } else if (state.shape === 'prism') {
+                const { a, h_tri, h } = state.prism;
+                const side = Math.sqrt(Math.pow(a/2, 2) + h_tri*h_tri);
+                const baseArea = 0.5 * a * h_tri;
+                area = 2 * baseArea + (a + 2*side) * h;
+                vol = baseArea * h;
+                fArea = `2×(½×${a.toFixed(1)}×${h_tri.toFixed(1)}) + Keliling×${h.toFixed(1)}`;
+                fVol = `(½×${a.toFixed(1)}×${h_tri.toFixed(1)}) × ${h.toFixed(1)}`;
+            } else if (state.shape === 'cylinder') {
+                const { r, h } = state.cylinder;
+                area = 2 * Math.PI * r * (r + h);
+                vol = Math.PI * r * r * h;
+                fArea = `2×π×${r.toFixed(1)}×(${r.toFixed(1)} + ${h.toFixed(1)})`;
+                fVol = `π × ${r.toFixed(1)}² × ${h.toFixed(1)}`;
+            } else if (state.shape === 'cone') {
+                const { r, h } = state.cone;
+                const s = Math.sqrt(r*r + h*h);
+                area = Math.PI * r * (r + s);
+                vol = (1/3) * Math.PI * r * r * h;
+                fArea = `π×${r.toFixed(1)}×(${r.toFixed(1)} + ${s.toFixed(1)})`;
+                fVol = `1/3 × π × ${r.toFixed(1)}² × ${h.toFixed(1)}`;
+            }
+
+            statArea.textContent = area.toFixed(2);
+            statVol.textContent = vol.toFixed(2);
+            formulaArea.textContent = fArea;
+            formulaVol.textContent = fVol;
+        }
+
+        // UPDATE INPUTS PANEL DYNAMICALLY
+        function updateUI() {
+            inputsContainer.innerHTML = '';
+
+            if (state.inputMode === 'area') {
+                // Target Area Input Mode
+                const div = document.createElement('div');
+                div.className = 'space-y-1';
+                div.innerHTML = `
+                    <div class="flex justify-between text-xs text-slate-300">
+                        <span>Target Luas Permukaan:</span>
+                        <span id="val-target-area" class="font-mono font-bold text-indigo-400">${state.targetArea}</span>
+                    </div>
+                    <input type="range" min="20" max="500" value="${state.targetArea}" step="1" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                `;
+                const slider = div.querySelector('input');
+                slider.addEventListener('input', (e) => {
+                    state.targetArea = parseFloat(e.target.value);
+                    document.getElementById('val-target-area').textContent = state.targetArea;
+                    recalculateDimensionsFromArea();
+                    buildShape();
+                });
+                inputsContainer.appendChild(div);
+                return;
+            }
+
+            // Dimension Sliders Mode
+            const shapeParams = {
+                cube: [{ key: 'a', label: 'Sisi (a)', min: 1, max: 10, step: 0.1 }],
+                cuboid: [
+                    { key: 'l', label: 'Panjang (l)', min: 1, max: 10, step: 0.1 },
+                    { key: 'w', label: 'Lebar (w)', min: 1, max: 10, step: 0.1 },
+                    { key: 'h', label: 'Tinggi (h)', min: 1, max: 10, step: 0.1 }
+                ],
+                pyramid: [
+                    { key: 'a', label: 'Sisi Alas (a)', min: 1, max: 10, step: 0.1 },
+                    { key: 'h', label: 'Tinggi Limas (h)', min: 1, max: 10, step: 0.1 }
+                ],
+                prism: [
+                    { key: 'a', label: 'Alas Segitiga (a)', min: 1, max: 10, step: 0.1 },
+                    { key: 'h_tri', label: 'Tinggi Segitiga', min: 1, max: 10, step: 0.1 },
+                    { key: 'h', label: 'Tinggi Prisma (h)', min: 1, max: 10, step: 0.1 }
+                ],
+                cylinder: [
+                    { key: 'r', label: 'Jari-Jari (r)', min: 1, max: 6, step: 0.1 },
+                    { key: 'h', label: 'Tinggi (h)', min: 1, max: 10, step: 0.1 }
+                ],
+                cone: [
+                    { key: 'r', label: 'Jari-Jari (r)', min: 1, max: 6, step: 0.1 },
+                    { key: 'h', label: 'Tinggi (h)', min: 1, max: 10, step: 0.1 }
+                ]
+            };
+
+            const params = shapeParams[state.shape];
+            params.forEach(p => {
+                const val = state[state.shape][p.key];
+                const div = document.createElement('div');
+                div.className = 'space-y-1';
+                div.innerHTML = `
+                    <div class="flex justify-between text-xs text-slate-300">
+                        <span>${p.label}:</span>
+                        <span class="font-mono font-bold text-indigo-400">${val.toFixed(1)}</span>
+                    </div>
+                    <input type="range" min="${p.min}" max="${p.max}" value="${val}" step="${p.step}" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                `;
+                const slider = div.querySelector('input');
+                slider.addEventListener('input', (e) => {
+                    const newNorm = parseFloat(e.target.value);
+                    state[state.shape][p.key] = newNorm;
+                    div.querySelector('.font-mono').textContent = newNorm.toFixed(1);
+                    buildShape();
+                });
+                inputsContainer.appendChild(div);
+            });
+        }
+
+        // SCALE ALL DIMENSIONS PROPORTIONALLY BASED ON TARGET SURFACE AREA
+        function recalculateDimensionsFromArea() {
+            // Calculate current surface area
+            calculateStats();
+            const currentArea = parseFloat(statArea.textContent);
+            if (currentArea <= 0) return;
+
+            // Scale factor for dimensions = sqrt(targetArea / currentArea)
+            const scaleFactor = Math.sqrt(state.targetArea / currentArea);
+
+            const obj = state[state.shape];
+            for (let k in obj) {
+                obj[k] = Math.max(0.5, obj[k] * scaleFactor);
+            }
+        }
+
+        // EVENT LISTENERS SETUP
+        function setupEventListeners() {
+            shapeSelect.addEventListener('change', (e) => {
+                state.shape = e.target.value;
+                if (state.inputMode === 'area') recalculateDimensionsFromArea();
+                updateUI();
+                buildShape();
+            });
+
+            foldSlider.addEventListener('input', (e) => {
+                state.foldPercent = parseFloat(e.target.value);
+                foldValueText.textContent = `${Math.round(state.foldPercent)}%`;
+                buildShape();
+            });
+
+            modeDimBtn.addEventListener('click', () => {
+                state.inputMode = 'dimension';
+                modeDimBtn.className = 'px-2 py-1 rounded-md font-medium text-white bg-indigo-600 transition-all';
+                modeAreaBtn.className = 'px-2 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all';
+                updateUI();
+            });
+
+            modeAreaBtn.addEventListener('click', () => {
+                state.inputMode = 'area';
+                modeAreaBtn.className = 'px-2 py-1 rounded-md font-medium text-white bg-indigo-600 transition-all';
+                modeDimBtn.className = 'px-2 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all';
+                recalculateDimensionsFromArea();
+                updateUI();
+                buildShape();
+            });
+
+            btnResetCam.addEventListener('click', () => {
+                camera.position.set(12, 12, 18);
+                controls.target.set(0, 0, 0);
+            });
+
+            btnToggleAutoRotate.addEventListener('click', () => {
+                isAutoRotate = !isAutoRotate;
+                controls.autoRotate = isAutoRotate;
+                autoRotateIcon.className = isAutoRotate ? 'fa-solid fa-rotate text-indigo-400' : 'fa-solid fa-pause text-slate-500';
+            });
+        }
+
+        // ANIMATION LOOP
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
